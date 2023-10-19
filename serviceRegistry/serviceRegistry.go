@@ -62,8 +62,8 @@ func (sr *ServiceRegistry) setNewBootstrap() error {
 var sr_mutex sync.Mutex
 
 func (sr *ServiceRegistry) JoinRequest(args utils.IP_PN_Mapping, joinReply *utils.ChordNode) error {
-	sr_mutex.Lock()
-	defer sr_mutex.Unlock()
+	/*sr_mutex.Lock()
+	defer sr_mutex.Unlock()*/
 	println("Join request invoked")
 	//nodo di bootstrap
 	ring_size, err := strconv.Atoi(os.Getenv("RING_SIZE"))
@@ -229,6 +229,28 @@ func (sr *ServiceRegistry) LeaveRequest(args utils.Args, leaveReply *utils.PutAr
 			client.Call("ChordNode.Off", *arg, rep)
 			delete(sr.ServiceMapping, args.Id)
 			sr.setNewBootstrap()
+			//update finger table degli altri nodi
+			for key := range sr.ServiceMapping {
+				client, err := rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
+
+				if err != nil {
+					log.Println("error connecting to the node", err.Error())
+					return err
+				}
+				args := new(utils.Args)
+				args.Id = key
+				rep := new(utils.Reply)
+				client.Call("ChordNode.UpdateFTRequest", *args, rep)
+				client.Close()
+				client, err = rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
+
+				err = client.Call("ChordNode.NewPredecessor", *args, rep)
+				if err != nil {
+					log.Println("Error in updating predecessor", err.Error())
+					return err
+				}
+				client.Close()
+			}
 			return nil
 
 		}
@@ -315,7 +337,12 @@ func (sr *ServiceRegistry) UpdateNeighbours(args utils.Args, rep *utils.Reply) e
 	client.Close()
 	return nil
 }
+
+var update_mutex sync.Mutex
+
 func updateFingerTable(sr *ServiceRegistry) {
+	update_mutex.Lock()
+	defer update_mutex.Unlock()
 	for {
 		time.Sleep(time.Minute * 1)
 		for key := range sr.ServiceMapping {
@@ -355,8 +382,7 @@ func updateFingerTable(sr *ServiceRegistry) {
 			}
 			client.Close()
 		}
-		/*
-		 */
+
 	}
 }
 

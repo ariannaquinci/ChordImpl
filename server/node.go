@@ -623,11 +623,8 @@ func (node *ChordNode) GetSuccessor(args utils.Args, reply *utils.GetReply) erro
 	return nil
 }
 
-var succ_mutex sync.Mutex
-
 func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetReply) error {
-	/*	succ_mutex.Lock()
-		defer succ_mutex.Unlock()*/
+
 	//se c'è un solo nodo nella rete esso è per forza il successore di args.Id
 
 	if node.Succ == node.Id {
@@ -638,21 +635,22 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 	}
 	if node.Pred == args.Id {
 		println("If a riga 585")
-		println("Successor for ", args.Id, "is:", node.Pred)
-		reply.Value = node.Pred
+		println("Successor for ", args.Id, "is:", node.Id)
+		reply.Value = node.Id
 		return nil
 	}
 
 	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) ||
 		(node.Pred > node.Id && (args.Id > node.Pred || args.Id <= node.Id)) {
 		//rientra nella porzione di indici gestita da node
+		println("if 646")
 		reply.Value = node.Id
 		return nil
 	}
 	//args.Id compreso tra  id del nodo ed id del successore del nodo
 	if (node.Succ > node.Id && args.Id > node.Id && args.Id <= node.Succ) ||
 		(node.Succ < node.Id && (args.Id > node.Id || args.Id <= node.Succ)) {
-
+		println("if 653")
 		reply.Value = node.Succ
 		return nil
 	}
@@ -662,12 +660,15 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		//calcolo il minimo
 		min = utils.MinInt(min, node.FingerTable[i])
 		if node.FingerTable[i] == args.Id {
+			println("if 663")
 			reply.Value = node.FingerTable[i]
 			return nil
 		}
 		//scorro la fingertable del nodo per capire quale nodo contattare per cercare il successore di args.Id
 		if node.FingerTable[i] < args.Id && (node.FingerTable[i+1] > args.Id || node.FingerTable[i+1] < min) {
 			if node.FingerTable[i] != node.Id {
+				println("if 670")
+
 				//contatto FT[i]
 				println("trying to contact node", node.FingerTable[i])
 				client, err := node.callNode(node.FingerTable[i])
@@ -689,6 +690,8 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 				reply.Value = rep.Value
 				return err
 			} else {
+				println("if 693")
+
 				reply.Value = node.FingerTable[i]
 				return nil
 			}
@@ -864,19 +867,13 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 			println("Building the map")
 			node.Data = make(map[int]string)
 		}
-		println("Id chosen is:", newId)
-		println("Node: ", node.Id, "is saving the new data into ", newId)
 
-		node.Data[newId] = args.Value
-		println("Value saved into data", node.Data[newId])
 		if newId == node.Succ {
 			println("Calling successor to put the resource", args.Value, "with Id", newId)
 			client, err := node.callNode(node.Succ)
 			if err != nil {
 				return err
 			}
-			defer client.Close()
-
 			if err != nil {
 				log.Println("Impossible to contact successor")
 				reply.Val = args.Value
@@ -884,14 +881,21 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 				return err
 			}
 			args.Id = newId
+
 			client.Call("ChordNode.Put", args, reply)
-			reply.Id = newId
-			reply.Val = args.Value
+			println("riga 886: The id chosen is:", reply.Id)
+
 			return nil
 		}
-		println("Value ", node.Data[newId], "saved")
+		println("Id chosen is:", newId)
+		println("Node: ", node.Id, "is saving the new data into ", newId)
+
+		node.Data[newId] = args.Value
+		println("Value saved into data", node.Data[newId])
+
 		reply.Id = newId
 		reply.Val = args.Value
+		println("riga 898: the id chosen is:", reply.Id)
 		return nil
 
 	} else {
