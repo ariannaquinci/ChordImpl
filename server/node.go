@@ -527,8 +527,11 @@ func PrintFT(node *ChordNode) {
 	}
 }
 
-func (node *ChordNode) UpdateFingerTable(args utils.ChordNode, reply *utils.Reply) error {
+var updateMutex sync.Mutex
 
+func (node *ChordNode) UpdateFingerTable(args utils.ChordNode, reply *utils.Reply) error {
+	updateMutex.Lock()
+	defer updateMutex.Unlock()
 	if node.FingerTable == nil || len(node.FingerTable) != node.FtSize {
 		node.FingerTable = make([]int, node.FtSize)
 	}
@@ -623,8 +626,8 @@ func (node *ChordNode) GetSuccessor(args utils.Args, reply *utils.GetReply) erro
 var succ_mutex sync.Mutex
 
 func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetReply) error {
-	succ_mutex.Lock()
-	defer succ_mutex.Unlock()
+	/*	succ_mutex.Lock()
+		defer succ_mutex.Unlock()*/
 	//se c'è un solo nodo nella rete esso è per forza il successore di args.Id
 
 	if node.Succ == node.Id {
@@ -666,6 +669,7 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		if node.FingerTable[i] < args.Id && (node.FingerTable[i+1] > args.Id || node.FingerTable[i+1] < min) {
 			if node.FingerTable[i] != node.Id {
 				//contatto FT[i]
+				println("trying to contact node", node.FingerTable[i])
 				client, err := node.callNode(node.FingerTable[i])
 				if err != nil {
 					return err
@@ -694,6 +698,7 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 	//se ho scorso tutta la fingertable e non c'è alcuna entry maggiore di args.Id chiamo il nodo più lontano da node, quindi ultima entry della FT
 	if node.FingerTable[node.FtSize-1] != node.Id && node.FingerTable[node.FtSize-1] != -1 {
 
+		println("Trying to contact node", node.FingerTable[node.FtSize-1])
 		client, err := node.callNode(node.FingerTable[node.FtSize-1])
 		if err != nil {
 			return err
@@ -890,6 +895,7 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 		return nil
 
 	} else {
+		println("Trying to find successor for", args.Id)
 		arg := new(utils.ArgsSuccessor)
 		arg.Id = args.Id
 		rep := new(utils.GetReply)

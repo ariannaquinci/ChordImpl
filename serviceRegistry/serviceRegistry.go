@@ -340,7 +340,7 @@ func updateFingerTable(sr *ServiceRegistry) {
 					args := new(utils.Args)
 					args.Id = key
 					rep := new(utils.Reply)
-					client.Call("ChordNode.UpdateFingerTable", *args, rep)
+					client.Call("ChordNode.UpdateFTRequest", *args, rep)
 					client.Close()
 					client, err = rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
 
