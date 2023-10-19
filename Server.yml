@@ -1,0 +1,88 @@
+version: '3'
+networks:
+  mynet:
+    driver: bridge
+services:
+  service-registry:
+    hostname: register
+    build:
+      context: .
+      dockerfile: "SRDockerfile"
+    ports:
+      - "8000:8000"
+    environment:
+      IP: "192.168.65.0"
+      PORT: "8000"
+      RING_SIZE: "32"
+    networks:
+      - mynet
+  node-0-app:
+    hostname: node0
+    build:
+      context: .
+      dockerfile: "NodeDockerfile"
+    ports:
+      - "8101:8101"
+    environment:
+      NODE_IP: "192.168.65.1"
+      NODE_PORT: "8101"
+    networks:
+      - mynet
+    depends_on:
+      - service-registry
+  node-1-app:
+    hostname: node1
+    build:
+      context: .
+      dockerfile: "NodeDockerfile"
+    ports:
+      - "8102:8102"
+    environment:
+      NODE_IP: "192.168.65.2"
+      NODE_PORT: "8102"
+    networks:
+      - mynet
+    depends_on:
+      - service-registry
+  node-2-app:
+    hostname: node2
+    build:
+      context: .
+      dockerfile: "NodeDockerfile"
+    ports:
+      - "8103:8103"
+    environment:
+      NODE_IP: "192.168.65.3"
+      NODE_PORT: "8103"
+    networks:
+      - mynet
+    depends_on:
+      - service-registry
+  node-3-app:
+    hostname: node3
+    build:
+      context: .
+      dockerfile: "NodeDockerfile"
+    ports:
+      - "8104:8104"
+    environment:
+      NODE_IP: "192.168.65.4"
+      NODE_PORT: "8104"
+    networks:
+      - mynet
+    depends_on:
+      - service-registry
+  node-4-app:
+    hostname: node4
+    build:
+      context: .
+      dockerfile: "NodeDockerfile"
+    ports:
+      - "8109:8109"
+    environment:
+      NODE_IP: "192.168.65.9"
+      NODE_PORT: "8109"
+    networks:
+      - mynet
+    depends_on:
+      - service-registry

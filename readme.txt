@@ -1,0 +1,1 @@
+comando da eseguire su windows: cmd.exe /c start_nodes.bat

@@ -1,0 +1,6 @@
+{
+  "ring_size": 32,
+  "port_number": "8000",
+  "ip_address": "192.168.65.0"
+
+}

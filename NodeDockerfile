@@ -1,0 +1,26 @@
+
+# Usa un'immagine di base contenente Go per compilare l'applicazione
+FROM golang:1.17 AS build
+
+WORKDIR /app
+
+# Copia i file go.mod per scaricare le dipendenze
+COPY go.mod ./
+RUN go mod download
+
+# Copia il resto del codice dell'applicazione
+
+COPY server/node.go ./
+COPY config.json ./
+COPY utils ./utils
+
+# Compila l'applicazione
+RUN go build -o node .
+
+# Definisci le variabili d'ambiente per l'indirizzo IP e la porta
+ENV NODE_IP $NODE_IP
+ENV NODE_PORT $NODE_PORT
+
+EXPOSE $NODE_PORT
+# Esegui l'applicazione
+CMD ["./node"]
