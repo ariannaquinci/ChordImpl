@@ -348,6 +348,7 @@ func updateFingerTable(sr *ServiceRegistry) {
 		for key := range sr.ServiceMapping {
 			println("Trying to connect to node", key)
 			client, err := rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
+
 			if err != nil {
 				//log.Fatal("Error connecting to the node:", err)
 				log.Println("Error in connecting to the node", err.Error())

@@ -85,8 +85,8 @@ func main() {
 	newChordNode.FtSize = reply.FtSize
 	newChordNode.ring_size = reply.RingSize
 	newChordNode.FingerTable = make([]int, newChordNode.FtSize)
-	data := make(map[int]string)
-	newChordNode.Data = data
+
+	newChordNode.Data = reply.Data
 	for i := 0; i < newChordNode.FtSize; i++ {
 		newChordNode.FingerTable[i] = reply.FingerTable[i]
 	}
@@ -324,9 +324,12 @@ func (node *ChordNode) Join(args utils.ChordNode, joinReply *utils.ChordNode) er
 	}
 	//il nodo in questione inserisce nel suo campo Data ciò che è contenuto in dataReply.Data
 	for key, val := range dataReply.Data {
+		println(key, ":", val)
 		(p.Data)[key] = val
 	}
-
+	for _, val := range p.Data {
+		println(val)
+	}
 	//una volta che il nodo ha ricevuto correttamente le risorse che p dovrà gestire succ(p) può cancellarle
 	reply := new(utils.DataReply)
 	removeArgs := new(ChordNode)
@@ -356,7 +359,11 @@ func (node *ChordNode) Join(args utils.ChordNode, joinReply *utils.ChordNode) er
 	joinReply.Succ = p.Succ
 	joinReply.Pred = p.Pred
 	joinReply.FtSize = p.FtSize
-	joinReply.Data = p.Data
+	joinReply.Data = make(map[int]string)
+	for key, val := range p.Data {
+		joinReply.Data[key] = val
+	}
+	//joinReply.Data = p.Data
 	joinReply.RingSize = p.ring_size
 	return nil
 }
@@ -556,18 +563,21 @@ func (node *ChordNode) UpdateFingerTable(args utils.ChordNode, reply *utils.Repl
 }
 
 func (node *ChordNode) GetData(args utils.ChordNode, reply *utils.DataReply) error {
-	data := make(map[int]string)
+	println("GETDATA INVOKED")
 	if node.Data == nil {
 		return nil
 	}
+	println("Getting data from node: ", node.Id)
+	reply.Data = make(map[int]string)
 	for key, val := range node.Data {
 
-		if (args.Pred < args.Id && key <= args.Id && key > args.Pred) ||
+		if (args.Pred < args.Id && key <= args.Id /*&& key > args.Pred*/) ||
 			(args.Pred > args.Id && (key >= args.Pred || key < args.Id)) {
-			data[key] = val
+			println(val)
+			reply.Data[key] = val
 		}
 	}
-	reply.Data = data
+
 	return nil
 }
 
@@ -635,8 +645,8 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 	}
 	if node.Pred == args.Id {
 		println("If a riga 585")
-		println("Successor for ", args.Id, "is:", node.Id)
-		reply.Value = node.Id
+		println("Successor for ", args.Id, "is:", node.Pred)
+		reply.Value = node.Pred
 		return nil
 	}
 
@@ -668,7 +678,6 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		if node.FingerTable[i] < args.Id && (node.FingerTable[i+1] > args.Id || node.FingerTable[i+1] < min) {
 			if node.FingerTable[i] != node.Id {
 				println("if 670")
-
 				//contatto FT[i]
 				println("trying to contact node", node.FingerTable[i])
 				client, err := node.callNode(node.FingerTable[i])
@@ -758,7 +767,7 @@ func (node *ChordNode) Get(args utils.Args, reply *utils.ValueReply) error {
 	println("Get on node", node.Id, "invoked")
 
 	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) ||
-		(node.Pred > node.Id && (args.Id < node.Id || args.Id > node.Pred)) {
+		(node.Pred > node.Id && (args.Id <= node.Id || args.Id > node.Pred)) {
 		println("Node", node.Id, "manages the resource with id", args.Id)
 		if node.Data == nil {
 			println("No data yet")
@@ -791,7 +800,6 @@ func (node *ChordNode) Get(args utils.Args, reply *utils.ValueReply) error {
 		if err != nil {
 			return err
 		}
-		defer client.Close()
 
 		if err != nil {
 			log.Println("Error in calling node", err.Error())
@@ -801,6 +809,7 @@ func (node *ChordNode) Get(args utils.Args, reply *utils.ValueReply) error {
 		}
 		println("Calling Get on node:", rep.Value)
 		client.Call("ChordNode.Get", args, reply)
+		client.Close()
 		return nil
 	}
 
@@ -814,7 +823,7 @@ func checkId(id int, node *ChordNode) int {
 		println("The id ", id, " is already in use")
 		println("The id of the node is: ", node.Id, "while its successor is: ", node.Succ)
 		if node.Id > node.Pred {
-			println("Purposed id minor then node's successor")
+
 			for i := node.Pred + 1; i <= node.Id+1; i++ {
 				println("Trying with id:", i)
 				if i == node.Id+1 {
@@ -825,13 +834,15 @@ func checkId(id int, node *ChordNode) int {
 				}
 			}
 		} else {
-			println("Node id major then node successor's id")
-			for j := node.Pred; j <= node.ring_size; j++ {
+
+			for j := node.Pred + 1; j <= node.ring_size-1; j++ {
+				println("Trying with id:", j)
 				if _, pres := node.Data[j]; !pres {
 					return j
 				}
 			}
 			for i := 0; i <= node.Id+1; i++ {
+				println("Trying with id:", i)
 				if i == node.Id+1 {
 					return node.Succ
 				}
@@ -840,12 +851,13 @@ func checkId(id int, node *ChordNode) int {
 				}
 			}
 		}
-		return node.Succ
 	} else {
 		//se id libero lo ritorno
 		println("Id chosen is: ", id)
 		return id
 	}
+	println("NON ENTRA IN NESSUN IF ELSE,RIGA 850")
+	return node.Succ
 }
 func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 	println("Put on node invoked")
