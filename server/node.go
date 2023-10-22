@@ -322,6 +322,7 @@ func (node *ChordNode) Join(args utils.ChordNode, joinReply *utils.ChordNode) er
 		node.GetData(*getArgs, dataReply)
 
 	}
+	p.Data = make(map[int]string)
 	//il nodo in questione inserisce nel suo campo Data ciò che è contenuto in dataReply.Data
 	for key, val := range dataReply.Data {
 		println(key, ":", val)
@@ -570,14 +571,16 @@ func (node *ChordNode) GetData(args utils.ChordNode, reply *utils.DataReply) err
 	println("Getting data from node: ", node.Id)
 	reply.Data = make(map[int]string)
 	for key, val := range node.Data {
-
-		if (args.Pred < args.Id && key <= args.Id /*&& key > args.Pred*/) ||
+		if (args.Pred < args.Id && key <= args.Id && key > args.Pred) ||
 			(args.Pred > args.Id && (key >= args.Pred || key < args.Id)) {
 			println(val)
 			reply.Data[key] = val
 		}
 	}
-
+	println("Giving data to node", args.Id)
+	for key, _ := range reply.Data {
+		println(key, ":", reply.Data[key])
+	}
 	return nil
 }
 
@@ -765,6 +768,19 @@ Detta k la chiave della risorsa che si sta cercando, bisogna distinguere 3 casi:
 
 func (node *ChordNode) Get(args utils.Args, reply *utils.ValueReply) error {
 	println("Get on node", node.Id, "invoked")
+	if node.Pred == node.Succ && node.Succ == node.Id {
+		//solo un nodo nell'anello
+		if _, pres := node.Data[args.Id]; pres {
+			reply.Val = node.Data[args.Id]
+			println(reply.Val)
+			return nil
+
+		} else {
+			reply.Val = ""
+			println(reply.Val)
+			return nil
+		}
+	}
 
 	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) ||
 		(node.Pred > node.Id && (args.Id <= node.Id || args.Id > node.Pred)) {
@@ -861,6 +877,23 @@ func checkId(id int, node *ChordNode) int {
 }
 func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 	println("Put on node invoked")
+	if node.Pred == node.Succ && node.Succ == node.Id {
+		newId := checkId(args.Id, node)
+		if node.Data == nil {
+			println("Building the map")
+			node.Data = make(map[int]string)
+		}
+		println("Id chosen is:", newId)
+		println("Node: ", node.Id, "is saving the new data into ", newId)
+
+		node.Data[newId] = args.Value
+		println("Value saved into data", node.Data[newId])
+
+		reply.Id = newId
+		reply.Val = args.Value
+		println("riga 892: the id chosen is:", reply.Id)
+		return nil
+	}
 	if args.RecursionCounter == node.ring_size {
 		//per limitare la ricorsione quando ho fatto chiamata
 		//a put per ring_size volte significa che non ho spazio nell'anello per memorizzare la risorsa
@@ -880,7 +913,7 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 			node.Data = make(map[int]string)
 		}
 
-		if newId == node.Succ {
+		if newId == node.Succ && newId != node.Id {
 			println("Calling successor to put the resource", args.Value, "with Id", newId)
 			client, err := node.callNode(node.Succ)
 			if err != nil {
@@ -924,31 +957,51 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 			return err
 		}
 		defer client.Close()
-
 		if err != nil {
 			log.Println("Error in calling node", err.Error())
 			reply.Val = args.Value
 			reply.Id = -1
 			return err
 		}
-
 		println("Calling Put on node:", rep.Value)
-
 		client.Call("ChordNode.Put", args, reply)
 		return nil
 	}
 }
 
 func (node *ChordNode) Delete(args utils.PutArgs, reply *utils.ValueReply) error {
+
+	if node.Pred == node.Succ && node.Succ == node.Id {
+		//solo un nodo nell'anello
+		if _, pres := node.Data[args.Id]; pres {
+			reply.Val = node.Data[args.Id]
+			println(reply.Val)
+			delete(node.Data, args.Id)
+			return nil
+
+		} else {
+			reply.Val = ""
+			println(reply.Val)
+			return nil
+		}
+	}
+
 	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) || (node.Pred > node.Id && (args.Id < node.Id || args.Id > node.Pred)) {
 		if node.Data == nil {
 			reply.Id = args.Id
 			reply.Val = ""
-			return errors.New("No resource matching the id")
+			return nil
 		}
+		if _, pres := node.Data[args.Id]; pres {
+			reply.Val = node.Data[args.Id]
+			println(reply.Val)
+			delete(node.Data, args.Id)
+			return nil
 
-		reply.Val = node.Data[args.Id]
-		delete(node.Data, args.Id)
+		} else {
+			reply.Val = ""
+			return nil
+		}
 
 	} else {
 		arg := new(utils.ArgsSuccessor)
