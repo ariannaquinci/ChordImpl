@@ -2,6 +2,7 @@ package main
 
 import (
 	"chord/utils"
+	"context"
 	"crypto/sha1"
 	"errors"
 	"log"
@@ -60,6 +61,40 @@ func (sr *ServiceRegistry) setNewBootstrap() error {
 }
 
 var sr_mutex sync.Mutex
+
+func firstUpdate(sr *ServiceRegistry) error {
+	println("Updating finger tables of the nodes!")
+	for key := range sr.ServiceMapping {
+		println("calling update on node:", key)
+
+		client, err := rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
+		defer client.Close()
+		if err != nil {
+			log.Println("Error in connecting to:", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
+
+			return err
+		}
+		nodeId := new(utils.Args)
+		replyNode := new(utils.ChordNode)
+		err = client.Call("ChordNode.GetNodeInfo", *nodeId, replyNode)
+		if err != nil {
+			log.Println("RPC error:", err.Error())
+
+			return err
+		}
+
+		rep := new(utils.Reply)
+		err = client.Call("ChordNode.UpdateFTRequest", *replyNode, rep)
+
+		if err != nil {
+
+			log.Println("RPC error on UpdateFTRequest", err.Error())
+			return err
+		}
+
+	}
+	return nil
+}
 
 func (sr *ServiceRegistry) JoinRequest(args utils.IP_PN_Mapping, joinReply *utils.ChordNode) error {
 	/*sr_mutex.Lock()
@@ -120,36 +155,8 @@ func (sr *ServiceRegistry) JoinRequest(args utils.IP_PN_Mapping, joinReply *util
 
 			//per tutti i nodi registrati nel service registry chiedo di aggiornare la propria FT in seguito all'entrata di un nodo
 			client.Close()
-			println("Updating finger tables of the nodes!")
-			for key := range sr.ServiceMapping {
-				println("calling update on node:", key)
 
-				client, err = rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
-				defer client.Close()
-				if err != nil {
-					log.Println("Error in connecting to:", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
-
-					return err
-				}
-				nodeId := new(utils.Args)
-				replyNode := new(utils.ChordNode)
-				err = client.Call("ChordNode.GetNodeInfo", *nodeId, replyNode)
-				if err != nil {
-					log.Println("RPC error:", err.Error())
-
-					return err
-				}
-
-				rep := new(utils.Reply)
-				err = client.Call("ChordNode.UpdateFTRequest", *replyNode, rep)
-
-				if err != nil {
-
-					log.Println("RPC error on UpdateFTRequest", err.Error())
-					return err
-				}
-
-			}
+			firstUpdate(sr)
 
 		} else {
 
@@ -341,10 +348,9 @@ func (sr *ServiceRegistry) UpdateNeighbours(args utils.Args, rep *utils.Reply) e
 var update_mutex sync.Mutex
 
 func updateFingerTable(sr *ServiceRegistry) {
-	update_mutex.Lock()
-	defer update_mutex.Unlock()
+	time.Sleep(time.Minute * 2)
 	for {
-		time.Sleep(time.Minute * 1)
+
 		for key := range sr.ServiceMapping {
 			println("Trying to connect to node", key)
 			client, err := rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
@@ -359,7 +365,7 @@ func updateFingerTable(sr *ServiceRegistry) {
 				sr.UpdateNeighbours(*args, rep)
 				delete(sr.ServiceMapping, key)
 				for key := range sr.ServiceMapping {
-					client, err := rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
+					client, err = rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
 
 					if err != nil {
 						log.Println("error connecting to the node", err.Error())
@@ -381,7 +387,36 @@ func updateFingerTable(sr *ServiceRegistry) {
 				}
 				break
 			}
-			client.Close()
+			time.Sleep(time.Second * 10)
+			/*	time.Sleep(time.Minute * 1)
+				for key := range sr.ServiceMapping {
+					println("calling update on node:", key)
+
+					client, err = rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
+					defer client.Close()
+					if err != nil {
+						log.Println("Error in connecting to:", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
+
+						break
+					}
+					nodeId := new(utils.Args)
+					replyNode := new(utils.ChordNode)
+					err = client.Call("ChordNode.GetNodeInfo", *nodeId, replyNode)
+					if err != nil {
+						log.Println("RPC error:", err.Error())
+						break
+					}
+
+					rep := new(utils.Reply)
+					err = client.Call("ChordNode.UpdateFTRequest", *replyNode, rep)
+
+					if err != nil {
+
+						log.Println("RPC error on UpdateFTRequest", err.Error())
+						break
+					}
+
+				}*/
 		}
 
 	}
@@ -401,24 +436,68 @@ func (sr *ServiceRegistry) generateChordNodeID(input string, input2 string, ring
 func (sr ServiceRegistry) Delete(args utils.PutArgs, reply *utils.ValueReply) error {
 	client, err := sr.contactBootstrap()
 	//invio richiesta get al nodo bootstrap
-	err = client.Call("ChordNode.Delete", args, reply)
-	if err != nil {
-		log.Println("RPC error:", err)
+	timeout := 30 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel() // Assicurati di cancellare il contesto alla fine della funzione
+	closeCtx := make(chan struct{})
+	go func() {
+		err = client.Call("ChordNode.Delete", args, reply)
+		defer client.Close()
+
+		if err != nil {
+			log.Println("Error:", err.Error())
+			reply.Val = ""
+
+		}
+		close(closeCtx)
+		return
+
+	}()
+	select {
+	case <-closeCtx:
+		return nil
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Println("Timeout: la chiamata RPC ha impiegato troppo tempo.")
+			return nil
+		}
 	}
-	client.Close()
-	return err
+
+	return nil
 
 }
 func (sr ServiceRegistry) Get(args utils.Args, reply *utils.ValueReply) error {
 	println("Service registry invoked")
 	client, err := sr.contactBootstrap()
 	//invio richiesta get al nodo bootstrap
-	err = client.Call("ChordNode.Get", args, reply)
-	if err != nil {
-		log.Println("Error:", err.Error())
+	timeout := 10 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel() // Assicurati di cancellare il contesto alla fine della funzione
+	closeCtx := make(chan struct{})
+	go func() {
+		err = client.Call("ChordNode.Get", args, reply)
+
+		defer client.Close()
+		if err != nil {
+			log.Println("Error:", err.Error())
+			reply.Val = ""
+
+		}
+
+		close(closeCtx)
+		return
+
+	}()
+	select {
+	case <-closeCtx:
+		return nil
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			log.Println("Timeout: la chiamata RPC ha impiegato troppo tempo.")
+			return nil
+		}
 	}
-	client.Close()
-	return err
+	return nil
 
 }
 func (sr ServiceRegistry) Put(args utils.PutArgs, reply *utils.ValueReply) error {
@@ -429,14 +508,41 @@ func (sr ServiceRegistry) Put(args utils.PutArgs, reply *utils.ValueReply) error
 		args.Id = generateResourceID(args.Value, ring_size)
 	}
 	//invio richiesta put al nodo bootstrap
+	timeout := 2 * time.Minute
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel() // Assicurati di cancellare il contesto alla fine della funzione
+	closeCtx := make(chan struct{})
+	go func() {
 
-	err = client.Call("ChordNode.Put", args, reply)
-	if err != nil {
-		log.Println("Error:", err.Error())
+		err = client.Call("ChordNode.Put", args, reply)
+		defer client.Close()
 
+		if err != nil {
+			log.Println("Error:", err.Error())
+			reply.Id = -1
+
+		}
+
+		println("Id chosen:", reply.Id)
+		close(closeCtx)
+
+		return
+
+	}()
+	select {
+	case <-closeCtx:
+		println("line 528 id chosen:", reply.Id)
+		return nil
+
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			reply.Id = -1
+			log.Println("Timeout: la chiamata RPC ha impiegato troppo tempo.")
+			return nil
+		}
 	}
-	client.Close()
-	return err
+
+	return nil
 }
 
 func (sr ServiceRegistry) contactNode(id int) (*rpc.Client, error) {

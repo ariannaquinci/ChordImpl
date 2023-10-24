@@ -51,10 +51,10 @@ func main() {
 	reply := new(utils.ChordNode)
 	reply.Name = name
 	println("Invoking join request")
-	timeout := 3 * time.Minute
+	timeout := 2 * time.Minute
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel() // Assicurati di cancellare il contesto alla fine della funzione
-
+	closeCtx := make(chan struct{})
 	go func() {
 		err = client.Call("ServiceRegistry.JoinRequest", mapping, reply)
 		if err != nil {
@@ -62,15 +62,18 @@ func main() {
 			return
 
 		}
-		cancel()
+		close(closeCtx)
 
 	}()
 	select {
+	case <-closeCtx:
+		break
 	case <-ctx.Done():
 		if ctx.Err() == context.DeadlineExceeded {
 			log.Println("Timeout: la chiamata RPC ha impiegato troppo tempo.")
 			return
 		}
+
 	}
 	println("Creating the chodnode")
 
@@ -543,8 +546,8 @@ func (node *ChordNode) UpdateFingerTable(args utils.ChordNode, reply *utils.Repl
 	if node.FingerTable == nil || len(node.FingerTable) != node.FtSize {
 		node.FingerTable = make([]int, node.FtSize)
 	}
-
-	for i := 1; i <= node.FtSize; i++ {
+	node.FingerTable[0] = node.Succ
+	for i := 2; i <= node.FtSize; i++ {
 
 		val := (node.Id + int(math.Pow(2, float64(i-1)))) % node.ring_size
 		arg := new(utils.ArgsSuccessor)
@@ -558,7 +561,6 @@ func (node *ChordNode) UpdateFingerTable(args utils.ChordNode, reply *utils.Repl
 		node.FingerTable[i-1] = rep.Value
 
 	}
-	node.Succ = node.FingerTable[0]
 
 	return nil
 }
@@ -637,10 +639,9 @@ func (node *ChordNode) GetSuccessor(args utils.Args, reply *utils.GetReply) erro
 }
 
 func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetReply) error {
-
-	//se c'è un solo nodo nella rete esso è per forza il successore di args.Id
-
+	println("Finding successor for:", args.Id)
 	if node.Succ == node.Id {
+		//se c'è un solo nodo nella rete esso è per forza il successore di args.Id
 		println("If a riga 579")
 		println("Successor for ", args.Id, "is:", node.Succ)
 		reply.Value = node.Id
@@ -652,7 +653,6 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		reply.Value = node.Pred
 		return nil
 	}
-
 	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) ||
 		(node.Pred > node.Id && (args.Id > node.Pred || args.Id <= node.Id)) {
 		//rientra nella porzione di indici gestita da node
@@ -667,6 +667,7 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		reply.Value = node.Succ
 		return nil
 	}
+
 	//altrimenti scorro la fingertable di node
 	min := 10 * node.ring_size
 	for i := 0; i < node.FtSize-1; i++ {
@@ -694,6 +695,7 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 					return err
 				}
 				rep := new(utils.GetReply)
+
 				err = client.Call("ChordNode.FindSuccessor", args, rep)
 				if err != nil {
 					log.Println("line 605 error in calling chordnode", err.Error())
@@ -701,6 +703,7 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 				}
 				reply.Value = rep.Value
 				return err
+
 			} else {
 				println("if 693")
 
@@ -824,7 +827,11 @@ func (node *ChordNode) Get(args utils.Args, reply *utils.ValueReply) error {
 
 		}
 		println("Calling Get on node:", rep.Value)
-		client.Call("ChordNode.Get", args, reply)
+		err = client.Call("ChordNode.Get", args, reply)
+		if err != nil {
+			reply.Val = ""
+			return nil
+		}
 		client.Close()
 		return nil
 	}
@@ -928,6 +935,7 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 			args.Id = newId
 
 			client.Call("ChordNode.Put", args, reply)
+
 			println("riga 886: The id chosen is:", reply.Id)
 
 			return nil
@@ -964,7 +972,11 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 			return err
 		}
 		println("Calling Put on node:", rep.Value)
-		client.Call("ChordNode.Put", args, reply)
+		err = client.Call("ChordNode.Put", args, reply)
+		if err != nil {
+			reply.Val = ""
+			return nil
+		}
 		return nil
 	}
 }
@@ -1020,7 +1032,11 @@ func (node *ChordNode) Delete(args utils.PutArgs, reply *utils.ValueReply) error
 			log.Println("Error in calling node", err.Error())
 			return err
 		}
-		client.Call("ChordNode.Delete", args, reply)
+		err = client.Call("ChordNode.Delete", args, reply)
+		if err != nil {
+			reply.Val = ""
+			return nil
+		}
 	}
 	return nil
 }

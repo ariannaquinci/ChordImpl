@@ -47,15 +47,15 @@ func remove() {
 	if err != nil {
 		log.Println("Error in reading JSON file:", err.Error())
 	}
-	print("json read ")
+
 	client, err := rpc.DialHTTP("tcp", address+":"+conf.Port_number)
-	fmt.Print("Insert the resource id you want to delete:")
+	fmt.Println("Insert the resource id you want to delete:")
 	args := new(utils.PutArgs)
 	reply := new(utils.ValueReply)
 	fmt.Scan(&args.Id)
 	client.Call("ServiceRegistry.Delete", *args, reply)
 	if reply.Val == "" {
-		fmt.Print("impossible to delete resource")
+		fmt.Println("impossible to delete resource")
 	} else {
 		println("The resource with id", args.Id, "and value", reply.Val, "has been deleted")
 	}
@@ -68,14 +68,14 @@ func get() {
 	println("json read ")
 	client, err := rpc.DialHTTP("tcp", address+":"+conf.Port_number)
 
-	fmt.Print("Insert the resource id you want to get:")
+	fmt.Println("Insert the resource id you want to get:")
 	args := new(utils.Args)
 	fmt.Scan(&args.Id)
 
 	reply := new(utils.ValueReply)
 	client.Call("ServiceRegistry.Get", *args, reply)
 	if reply.Val == "" {
-		fmt.Print("impossible to get resource")
+		fmt.Println("impossible to get resource")
 	} else {
 		println("The resource with id", args.Id, "is:", reply.Val)
 	}
@@ -90,16 +90,17 @@ func put() {
 	args := new(utils.PutArgs)
 	args.RecursionCounter = 0
 	reply := new(utils.ValueReply)
-	reply.Id = -1
-	fmt.Print("Insert the resource you want to insert:")
+	//reply.Id = -1
+	fmt.Println("Insert the resource you want to insert:")
 	fmt.Scan(&args.Value)
 
 	client.Call("ServiceRegistry.Put", *args, reply)
-	if reply.Id == -1 {
-		fmt.Print("Impossible to put resource")
-		return
-	}
 	println("The resource", args.Value, "entered with id:", reply.Id)
+	if reply.Id == -1 {
+		fmt.Println("Impossible to put resource")
+
+	}
+
 }
 func leave() {
 	//chiedi al service registry quali nodi sono attualmenete nel sistema
@@ -121,10 +122,10 @@ func leave() {
 
 	fmt.Println("Nodes in the ring are:")
 	for i := 0; i < len(rep.Ids); i++ {
-		fmt.Print(rep.Ids[i], "\n")
+		fmt.Println(rep.Ids[i], "\n")
 	}
 	args := new(utils.Args)
-	fmt.Print("Insert the node id you want to leave the ring")
+	fmt.Println("Insert the node id you want to leave the ring")
 	//invoca LeaveRequest sul service registry passandogli il node id
 	fmt.Scan(&args.Id)
 	reply := new(utils.PutArgs)
