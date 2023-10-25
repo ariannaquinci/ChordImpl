@@ -640,6 +640,7 @@ func (node *ChordNode) GetSuccessor(args utils.Args, reply *utils.GetReply) erro
 
 func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetReply) error {
 	println("Finding successor for:", args.Id)
+
 	if node.Succ == node.Id {
 		//se c'è un solo nodo nella rete esso è per forza il successore di args.Id
 		println("If a riga 579")
@@ -653,6 +654,7 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		reply.Value = node.Pred
 		return nil
 	}
+
 	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) ||
 		(node.Pred > node.Id && (args.Id > node.Pred || args.Id <= node.Id)) {
 		//rientra nella porzione di indici gestita da node
@@ -667,16 +669,48 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		reply.Value = node.Succ
 		return nil
 	}
+	if node.FingerTable[0] != node.Succ {
+		//significa che la fingertable non è ancora stata correttamente aggiornata, quindi invoco il successore
+		println("if 659")
+		//contatto FT[i]
+		println("trying to contact node", node.Succ)
+		client, err := node.callNode(node.Succ)
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+
+		if err != nil {
+			log.Println("line 598 error in RPC call to the node", node.Succ)
+			return err
+		}
+		rep := new(utils.GetReply)
+
+		err = client.Call("ChordNode.FindSuccessor", args, rep)
+		if err != nil {
+			log.Println("line 605 error in calling chordnode", err.Error())
+			return err
+		}
+		reply.Value = rep.Value
+		return err
+
+	}
 
 	//altrimenti scorro la fingertable di node
 	min := 10 * node.ring_size
+
+	c := 0
 	for i := 0; i < node.FtSize-1; i++ {
 		//calcolo il minimo
 		min = utils.MinInt(min, node.FingerTable[i])
+
 		if node.FingerTable[i] == args.Id {
 			println("if 663")
 			reply.Value = node.FingerTable[i]
 			return nil
+		}
+		if node.FingerTable[i] > args.Id {
+			c++
 		}
 		//scorro la fingertable del nodo per capire quale nodo contattare per cercare il successore di args.Id
 		if node.FingerTable[i] < args.Id && (node.FingerTable[i+1] > args.Id || node.FingerTable[i+1] < min) {
@@ -711,8 +745,35 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 				return nil
 			}
 		}
+		if c == node.FtSize-1 {
+			//se tutte le entries sono maggiori chiamo il successore
+			println("if 670")
+			//contatto FT[i]
+			println("trying to contact node", node.Succ)
+			client, err := node.callNode(node.Succ)
+			if err != nil {
+				return err
+			}
+			defer client.Close()
+
+			if err != nil {
+				log.Println("line 598 error in RPC call to the node", node.Succ)
+				return err
+			}
+			rep := new(utils.GetReply)
+
+			err = client.Call("ChordNode.FindSuccessor", args, rep)
+			if err != nil {
+				log.Println("line 605 error in calling chordnode", err.Error())
+				return err
+			}
+			reply.Value = rep.Value
+			return err
+
+		}
 
 	}
+
 	//se ho scorso tutta la fingertable e non c'è alcuna entry maggiore di args.Id chiamo il nodo più lontano da node, quindi ultima entry della FT
 	if node.FingerTable[node.FtSize-1] != node.Id && node.FingerTable[node.FtSize-1] != -1 {
 
