@@ -546,6 +546,7 @@ func (node *ChordNode) UpdateFingerTable(args utils.ChordNode, reply *utils.Repl
 	if node.FingerTable == nil || len(node.FingerTable) != node.FtSize {
 		node.FingerTable = make([]int, node.FtSize)
 	}
+
 	node.FingerTable[0] = node.Succ
 	for i := 2; i <= node.FtSize; i++ {
 
@@ -1043,7 +1044,7 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 }
 
 func (node *ChordNode) Delete(args utils.PutArgs, reply *utils.ValueReply) error {
-
+	println("Get on node", node.Id, "invoked")
 	if node.Pred == node.Succ && node.Succ == node.Id {
 		//solo un nodo nell'anello
 		if _, pres := node.Data[args.Id]; pres {
@@ -1059,8 +1060,11 @@ func (node *ChordNode) Delete(args utils.PutArgs, reply *utils.ValueReply) error
 		}
 	}
 
-	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) || (node.Pred > node.Id && (args.Id < node.Id || args.Id > node.Pred)) {
+	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) ||
+		(node.Pred > node.Id && (args.Id <= node.Id || args.Id > node.Pred)) {
+		println("Node", node.Id, "manages the resource with id", args.Id)
 		if node.Data == nil {
+			println("No data yet")
 			reply.Id = args.Id
 			reply.Val = ""
 			return nil
@@ -1073,31 +1077,96 @@ func (node *ChordNode) Delete(args utils.PutArgs, reply *utils.ValueReply) error
 
 		} else {
 			reply.Val = ""
+			println(reply.Val)
 			return nil
 		}
 
 	} else {
+
+		//-----------------------------------------------------
 		arg := new(utils.ArgsSuccessor)
 		arg.Id = args.Id
 		rep := new(utils.GetReply)
 		//find successor ritorna il node id da contattare
 		node.FindSuccessor(*arg, rep)
+		println("Successor for ", arg.Id, "is: ", rep.Value)
 		//contatto il nodo
 		client, err := node.callNode(rep.Value)
 		if err != nil {
 			return err
 		}
-		defer client.Close()
 
 		if err != nil {
 			log.Println("Error in calling node", err.Error())
-			return err
+			reply.Val = ""
+			return nil
+
 		}
+		println("Calling Delete on node:", rep.Value)
 		err = client.Call("ChordNode.Delete", args, reply)
 		if err != nil {
 			reply.Val = ""
 			return nil
 		}
+		client.Close()
+		return nil
 	}
-	return nil
+
+	/*
+		if node.Pred == node.Succ && node.Succ == node.Id {
+			//solo un nodo nell'anello
+			if _, pres := node.Data[args.Id]; pres {
+				reply.Val = node.Data[args.Id]
+				println(reply.Val)
+				delete(node.Data, args.Id)
+				return nil
+
+			} else {
+				reply.Val = ""
+				println(reply.Val)
+				return nil
+			}
+		}
+
+		if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) || (node.Pred > node.Id && (args.Id < node.Id || args.Id > node.Pred)) {
+			if node.Data == nil {
+				reply.Id = args.Id
+				reply.Val = ""
+				return nil
+			}
+			if _, pres := node.Data[args.Id]; pres {
+				reply.Val = node.Data[args.Id]
+				println(reply.Val)
+				delete(node.Data, args.Id)
+				return nil
+
+			} else {
+				reply.Val = ""
+				return nil
+			}
+
+		} else {
+			arg := new(utils.ArgsSuccessor)
+			arg.Id = args.Id
+			rep := new(utils.GetReply)
+			//find successor ritorna il node id da contattare
+			node.FindSuccessor(*arg, rep)
+			//contatto il nodo
+			client, err := node.callNode(rep.Value)
+			if err != nil {
+				return err
+			}
+			defer client.Close()
+
+			if err != nil {
+				log.Println("Error in calling node", err.Error())
+				return err
+			}
+			err = client.Call("ChordNode.Delete", args, reply)
+			if err != nil {
+				reply.Val = ""
+				return nil
+			}
+		}
+		return nil*/
 }

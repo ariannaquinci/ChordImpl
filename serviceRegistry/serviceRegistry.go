@@ -146,8 +146,8 @@ func (sr *ServiceRegistry) JoinRequest(args utils.IP_PN_Mapping, joinReply *util
 			joinReply.Pred = reply.Pred
 			joinReply.Succ = reply.Succ
 			joinReply.Data = reply.Data
-			joinReply.FtSize = reply.FtSize
-			joinReply.FingerTable = make([]int, joinReply.FtSize)
+			joinReply.FtSize = nodeArgs.FtSize
+			joinReply.FingerTable = make([]int, nodeArgs.FtSize)
 			for i := 0; i < joinReply.FtSize; i++ {
 				joinReply.FingerTable[i] = -1
 			}
@@ -168,8 +168,8 @@ func (sr *ServiceRegistry) JoinRequest(args utils.IP_PN_Mapping, joinReply *util
 			addr.Pn = args.PN
 			addr.Id = id
 			addr.Name = args.HostName
-			sr.AddService(*addr, new(utils.Reply))
-			sr.done = true
+			//sr.AddService(*addr, new(utils.Reply))
+			//sr.done = true
 			joinReply.RingSize = ring_size
 			joinReply.Id = id
 			joinReply.Succ = id
@@ -186,6 +186,8 @@ func (sr *ServiceRegistry) JoinRequest(args utils.IP_PN_Mapping, joinReply *util
 
 				return nil
 			}
+			sr.AddService(*addr, new(utils.Reply))
+			sr.done = true
 
 		}
 	} else {
@@ -348,7 +350,31 @@ func (sr *ServiceRegistry) UpdateNeighbours(args utils.Args, rep *utils.Reply) e
 var update_mutex sync.Mutex
 
 func updateFingerTable(sr *ServiceRegistry) {
-	time.Sleep(time.Minute * 2)
+
+	time.Sleep(time.Second * 30)
+	for key := range sr.ServiceMapping {
+		client, err := rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
+
+		if err != nil {
+			log.Println("error connecting to the node", err.Error())
+			return
+		}
+		args := new(utils.Args)
+		args.Id = key
+		rep := new(utils.Reply)
+		client.Call("ChordNode.UpdateFTRequest", *args, rep)
+		client.Close()
+		client, err = rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
+
+		err = client.Call("ChordNode.NewPredecessor", *args, rep)
+		if err != nil {
+			log.Println("Error in updating predecessor", err.Error())
+			return
+		}
+		client.Close()
+
+	}
+
 	for {
 
 		for key := range sr.ServiceMapping {
