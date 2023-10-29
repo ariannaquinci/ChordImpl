@@ -7,4 +7,4 @@ NODE_PORT=$(jq -r '.node_pn' $NODE_CONFIG_FILE)
 
 # Avvia il container Docker basato sul Dockerfile
 sudo docker build -t "runtime-chord-node" -f ./NodeDockerfile .
-sudo docker run --rm -p $NODE_PORT:$NODE_PORT --network=chord_mynet -e NODE_PORT=$NODE_PORT "runtime-chord-node"
+sudo docker run --rm -p $NODE_PORT:$NODE_PORT --network=chordimpl_mynet -e NODE_PORT=$NODE_PORT "runtime-chord-node"
