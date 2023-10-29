@@ -3,7 +3,10 @@ Ecco i passi neceassari all'avvio del sistema:
 1. Compilare manager.go: "go build manager.go"
 2. Eseguire il file eseguibile generato dalla compilazione "./manager", questo genererà i dockerfiles a partire dai file json di configurazione ("nodeConfig.json" e "config.json") ed il file "Server.yml"
 3. Avviare Docker Compose: "docker-compose -f Server.yml up"
-4. Dopo l'avvio del sistema se si vuole aggiungere un nodo si può utilizzare lo script bash: "start_nodes.sh"
+4. Dopo l'avvio del sistema se si vuole aggiungere un nodo si può utilizzare lo script bash: "start_nodes.sh".
+    Concedere i permessi di esecuzione: "chmod +x start_nodes.sh" e poi eseguirlo: "./start_nodes".
+    ATTENZIONE: Se si riscontra un messaggio di errore legato al file bash, che potrebbe essersi corrotto su host Windows, utilizzare il seguente comando: 
+    "sed -i 's/\r$//' ./start_nodes.sh". 
 5. Per avviare il client:
     a. Aprire un altro terminale e muoversi nella cartella "client"
     b. Compilare client.go: "go build client.go"
