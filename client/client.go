@@ -65,7 +65,6 @@ func get() {
 	if err != nil {
 		log.Println("Error in reading JSON file:", err.Error())
 	}
-	println("json read ")
 	client, err := rpc.DialHTTP("tcp", address+":"+conf.Port_number)
 
 	fmt.Println("Insert the resource id you want to get:")
@@ -122,7 +121,7 @@ func leave() {
 
 	fmt.Println("Nodes in the ring are:")
 	for i := 0; i < len(rep.Ids); i++ {
-		fmt.Println(rep.Ids[i], "\n")
+		fmt.Println(rep.Ids[i])
 	}
 	args := new(utils.Args)
 	fmt.Println("Insert the node id you want to leave the ring")

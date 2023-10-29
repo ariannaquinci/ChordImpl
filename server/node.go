@@ -24,7 +24,6 @@ var done = make(chan (bool))
 var maxRetries = 3
 
 func main() {
-	println("Node is running")
 	node := newNode()
 	name, err := os.Hostname()
 	mapping := utils.IP_PN_Mapping{
@@ -40,7 +39,6 @@ func main() {
 		log.Println("Error reading configuration file", err)
 		return
 	}
-	println("Trying to contact service registry")
 	client, err := rpc.DialHTTP("tcp", address+":"+conf.Port_number)
 	defer client.Close()
 
@@ -75,7 +73,6 @@ func main() {
 		}
 
 	}
-	println("Creating the chodnode")
 
 	//una volta che il server è un nodo dell'anello lo metto in ascolto
 	newChordNode := new(ChordNode)
@@ -328,12 +325,10 @@ func (node *ChordNode) Join(args utils.ChordNode, joinReply *utils.ChordNode) er
 	p.Data = make(map[int]string)
 	//il nodo in questione inserisce nel suo campo Data ciò che è contenuto in dataReply.Data
 	for key, val := range dataReply.Data {
-		println(key, ":", val)
+
 		(p.Data)[key] = val
 	}
-	for _, val := range p.Data {
-		println(val)
-	}
+
 	//una volta che il nodo ha ricevuto correttamente le risorse che p dovrà gestire succ(p) può cancellarle
 	reply := new(utils.DataReply)
 	removeArgs := new(ChordNode)
@@ -403,7 +398,7 @@ Il nodo p che vuole uscire dall'anello deve:
 */
 
 func (node *ChordNode) Leave(args utils.ChordNode, leaveReply *utils.Reply) error {
-	log.Println("Calling leave on this node")
+	log.Println("Calling leave on node:", node.Id)
 	client, err := node.callNode(node.Succ)
 	if err != nil {
 		return err
@@ -423,7 +418,7 @@ func (node *ChordNode) Leave(args utils.ChordNode, leaveReply *utils.Reply) erro
 	for key, value := range node.Data {
 
 		dataNode.Data[key] = value
-		println("Key:", key, "Value:", dataNode.Data[key])
+
 	}
 
 	//trasferimento chiavi a succ(p)
@@ -500,7 +495,6 @@ func (node *ChordNode) SetData(args utils.ChordNode, reply *utils.Reply) error {
 	print("Setting data on node", node.Id, "\n")
 
 	if node.Data == nil {
-		println("Creating map for node ", node.Id)
 		node.Data = make(map[int]string)
 	}
 	for key, val := range args.Data {
@@ -514,7 +508,7 @@ func (node *ChordNode) UpdateSuccessor(args utils.Args, reply *utils.Reply) erro
 
 	node.Succ = args.Id
 	reply.Reply = true
-	println("New successor for ", node.Id, "is: ", node.Succ)
+
 	return nil
 }
 func (node *ChordNode) SetNewFT(args utils.ChordNode, reply *utils.Reply) error {
@@ -571,19 +565,16 @@ func (node *ChordNode) GetData(args utils.ChordNode, reply *utils.DataReply) err
 	if node.Data == nil {
 		return nil
 	}
-	println("Getting data from node: ", node.Id)
+
 	reply.Data = make(map[int]string)
 	for key, val := range node.Data {
 		if (args.Pred < args.Id && key <= args.Id && key > args.Pred) ||
 			(args.Pred > args.Id && (key >= args.Pred || key < args.Id)) {
-			println(val)
+
 			reply.Data[key] = val
 		}
 	}
-	println("Giving data to node", args.Id)
-	for key, _ := range reply.Data {
-		println(key, ":", reply.Data[key])
-	}
+
 	return nil
 }
 
@@ -607,7 +598,7 @@ func (node *ChordNode) callNode(id int) (rpc.Client, error) {
 	args.Id = id
 	err = client.Call("ServiceRegistry.GetNode", *args, reply)
 	if err != nil {
-		log.Println("RPC error at line 518", err.Error())
+		log.Println("RPC error", err.Error())
 		return rpc.Client{}, err
 	}
 
@@ -644,14 +635,11 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 
 	if node.Succ == node.Id {
 		//se c'è un solo nodo nella rete esso è per forza il successore di args.Id
-		println("If a riga 579")
-		println("Successor for ", args.Id, "is:", node.Succ)
+
 		reply.Value = node.Id
 		return nil
 	}
 	if node.Pred == args.Id {
-		println("If a riga 585")
-		println("Successor for ", args.Id, "is:", node.Pred)
 		reply.Value = node.Pred
 		return nil
 	}
@@ -659,22 +647,20 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) ||
 		(node.Pred > node.Id && (args.Id > node.Pred || args.Id <= node.Id)) {
 		//rientra nella porzione di indici gestita da node
-		println("if 646")
+
 		reply.Value = node.Id
 		return nil
 	}
 	//args.Id compreso tra  id del nodo ed id del successore del nodo
 	if (node.Succ > node.Id && args.Id > node.Id && args.Id <= node.Succ) ||
 		(node.Succ < node.Id && (args.Id > node.Id || args.Id <= node.Succ)) {
-		println("if 653")
+
 		reply.Value = node.Succ
 		return nil
 	}
 	if node.FingerTable[0] != node.Succ {
 		//significa che la fingertable non è ancora stata correttamente aggiornata, quindi invoco il successore
-		println("if 659")
-		//contatto FT[i]
-		println("trying to contact node", node.Succ)
+
 		client, err := node.callNode(node.Succ)
 		if err != nil {
 			return err
@@ -682,14 +668,14 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		defer client.Close()
 
 		if err != nil {
-			log.Println("line 598 error in RPC call to the node", node.Succ)
+			log.Println("error in RPC call to the node", node.Succ)
 			return err
 		}
 		rep := new(utils.GetReply)
 
 		err = client.Call("ChordNode.FindSuccessor", args, rep)
 		if err != nil {
-			log.Println("line 605 error in calling chordnode", err.Error())
+			log.Println("error in calling chordnode", err.Error())
 			return err
 		}
 		reply.Value = rep.Value
@@ -706,7 +692,7 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		min = utils.MinInt(min, node.FingerTable[i])
 
 		if node.FingerTable[i] == args.Id {
-			println("if 663")
+
 			reply.Value = node.FingerTable[i]
 			return nil
 		}
@@ -716,7 +702,7 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		//scorro la fingertable del nodo per capire quale nodo contattare per cercare il successore di args.Id
 		if node.FingerTable[i] < args.Id && (node.FingerTable[i+1] > args.Id || node.FingerTable[i+1] < min) {
 			if node.FingerTable[i] != node.Id {
-				println("if 670")
+
 				//contatto FT[i]
 				println("trying to contact node", node.FingerTable[i])
 				client, err := node.callNode(node.FingerTable[i])
@@ -726,7 +712,7 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 				defer client.Close()
 
 				if err != nil {
-					log.Println("line 598 error in RPC call to the node", node.FingerTable[i])
+					log.Println("error in RPC call to the node", node.FingerTable[i])
 					return err
 				}
 				rep := new(utils.GetReply)
@@ -740,7 +726,6 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 				return err
 
 			} else {
-				println("if 693")
 
 				reply.Value = node.FingerTable[i]
 				return nil
@@ -748,9 +733,7 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		}
 		if c == node.FtSize-1 {
 			//se tutte le entries sono maggiori chiamo il successore
-			println("if 670")
-			//contatto FT[i]
-			println("trying to contact node", node.Succ)
+
 			client, err := node.callNode(node.Succ)
 			if err != nil {
 				return err
@@ -778,7 +761,6 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 	//se ho scorso tutta la fingertable e non c'è alcuna entry maggiore di args.Id chiamo il nodo più lontano da node, quindi ultima entry della FT
 	if node.FingerTable[node.FtSize-1] != node.Id && node.FingerTable[node.FtSize-1] != -1 {
 
-		println("Trying to contact node", node.FingerTable[node.FtSize-1])
 		client, err := node.callNode(node.FingerTable[node.FtSize-1])
 		if err != nil {
 			return err
@@ -786,13 +768,13 @@ func (node *ChordNode) FindSuccessor(args utils.ArgsSuccessor, reply *utils.GetR
 		defer client.Close()
 
 		if err != nil {
-			log.Println("line 669 error in RPC call to the node", err.Error())
+			log.Println("error in RPC call to the node", err.Error())
 			return err
 		}
 		rep := new(utils.GetReply)
 		err = client.Call("ChordNode.FindSuccessor", args, rep)
 		if err != nil {
-			log.Println("LINE 660 RPC ERROR", err.Error())
+			log.Println("Error in calling findsuccessor on node", err.Error())
 			return err
 		}
 		reply.Value = rep.Value
@@ -837,33 +819,32 @@ func (node *ChordNode) Get(args utils.Args, reply *utils.ValueReply) error {
 		//solo un nodo nell'anello
 		if _, pres := node.Data[args.Id]; pres {
 			reply.Val = node.Data[args.Id]
-			println(reply.Val)
+
 			return nil
 
 		} else {
 			reply.Val = ""
-			println(reply.Val)
+
 			return nil
 		}
 	}
 
 	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) ||
 		(node.Pred > node.Id && (args.Id <= node.Id || args.Id > node.Pred)) {
-		println("Node", node.Id, "manages the resource with id", args.Id)
+
 		if node.Data == nil {
-			println("No data yet")
 			reply.Id = args.Id
 			reply.Val = ""
 			return nil
 		}
 		if _, pres := node.Data[args.Id]; pres {
 			reply.Val = node.Data[args.Id]
-			println(reply.Val)
+
 			return nil
 
 		} else {
 			reply.Val = ""
-			println(reply.Val)
+
 			return nil
 		}
 
@@ -875,7 +856,6 @@ func (node *ChordNode) Get(args utils.Args, reply *utils.ValueReply) error {
 		rep := new(utils.GetReply)
 		//find successor ritorna il node id da contattare
 		node.FindSuccessor(*arg, rep)
-		println("Successor for ", arg.Id, "is: ", rep.Value)
 		//contatto il nodo
 		client, err := node.callNode(rep.Value)
 		if err != nil {
@@ -888,7 +868,6 @@ func (node *ChordNode) Get(args utils.Args, reply *utils.ValueReply) error {
 			return nil
 
 		}
-		println("Calling Get on node:", rep.Value)
 		err = client.Call("ChordNode.Get", args, reply)
 		if err != nil {
 			reply.Val = ""
@@ -905,12 +884,11 @@ var counter int
 func checkId(id int, node *ChordNode) int {
 	println("Checking id for resource with purposed id:", id)
 	if _, pres := node.Data[id]; pres {
-		println("The id ", id, " is already in use")
-		println("The id of the node is: ", node.Id, "while its successor is: ", node.Succ)
+
 		if node.Id > node.Pred {
 
 			for i := node.Pred + 1; i <= node.Id+1; i++ {
-				println("Trying with id:", i)
+
 				if i == node.Id+1 {
 					return node.Succ
 				}
@@ -921,13 +899,13 @@ func checkId(id int, node *ChordNode) int {
 		} else {
 
 			for j := node.Pred + 1; j <= node.ring_size-1; j++ {
-				println("Trying with id:", j)
+
 				if _, pres := node.Data[j]; !pres {
 					return j
 				}
 			}
 			for i := 0; i <= node.Id+1; i++ {
-				println("Trying with id:", i)
+
 				if i == node.Id+1 {
 					return node.Succ
 				}
@@ -941,7 +919,6 @@ func checkId(id int, node *ChordNode) int {
 		println("Id chosen is: ", id)
 		return id
 	}
-	println("NON ENTRA IN NESSUN IF ELSE,RIGA 850")
 	return node.Succ
 }
 func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
@@ -949,18 +926,14 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 	if node.Pred == node.Succ && node.Succ == node.Id {
 		newId := checkId(args.Id, node)
 		if node.Data == nil {
-			println("Building the map")
+
 			node.Data = make(map[int]string)
 		}
-		println("Id chosen is:", newId)
-		println("Node: ", node.Id, "is saving the new data into ", newId)
 
 		node.Data[newId] = args.Value
-		println("Value saved into data", node.Data[newId])
-
 		reply.Id = newId
 		reply.Val = args.Value
-		println("riga 892: the id chosen is:", reply.Id)
+
 		return nil
 	}
 	if args.RecursionCounter == node.ring_size {
@@ -971,25 +944,23 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 	} else {
 		args.RecursionCounter++
 	}
-	println(node.Pred, "is node's predecessor", node.Id, "is node's id", "and", args.Id, "is the argument")
 	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) ||
 		(node.Pred > node.Id && (args.Id <= node.Id || args.Id > node.Pred)) {
 		println("node ", node.Id, "manages ", args.Id)
-		println("Calling checkId on node", node.Id)
+
 		newId := checkId(args.Id, node)
 		if node.Data == nil {
-			println("Building the map")
 			node.Data = make(map[int]string)
 		}
 
 		if newId == node.Succ && newId != node.Id {
-			println("Calling successor to put the resource", args.Value, "with Id", newId)
+			//println("Calling successor to put the resource", args.Value, "with Id", newId)
 			client, err := node.callNode(node.Succ)
 			if err != nil {
 				return err
 			}
 			if err != nil {
-				log.Println("Impossible to contact successor")
+				//log.Println("Impossible to contact successor")
 				reply.Val = args.Value
 				reply.Id = -1
 				return err
@@ -998,29 +969,29 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 
 			client.Call("ChordNode.Put", args, reply)
 
-			println("riga 886: The id chosen is:", reply.Id)
+			//println("riga 886: The id chosen is:", reply.Id)
 
 			return nil
 		}
-		println("Id chosen is:", newId)
-		println("Node: ", node.Id, "is saving the new data into ", newId)
+		//println("Id chosen is:", newId)
+		//println("Node: ", node.Id, "is saving the new data into ", newId)
 
 		node.Data[newId] = args.Value
-		println("Value saved into data", node.Data[newId])
+		//println("Value saved into data", node.Data[newId])
 
 		reply.Id = newId
 		reply.Val = args.Value
-		println("riga 898: the id chosen is:", reply.Id)
+		//println("riga 898: the id chosen is:", reply.Id)
 		return nil
 
 	} else {
-		println("Trying to find successor for", args.Id)
+		//println("Trying to find successor for", args.Id)
 		arg := new(utils.ArgsSuccessor)
 		arg.Id = args.Id
 		rep := new(utils.GetReply)
 		//find successor ritorna il node id da contattare
 		node.FindSuccessor(*arg, rep)
-		println("Successor for ", arg.Id, "is: ", rep.Value)
+		//println("Successor for ", arg.Id, "is: ", rep.Value)
 		//contatto il nodo
 		client, err := node.callNode(rep.Value)
 		if err != nil {
@@ -1033,7 +1004,7 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 			reply.Id = -1
 			return err
 		}
-		println("Calling Put on node:", rep.Value)
+		//println("Calling Put on node:", rep.Value)
 		err = client.Call("ChordNode.Put", args, reply)
 		if err != nil {
 			reply.Val = ""
@@ -1044,40 +1015,40 @@ func (node *ChordNode) Put(args utils.PutArgs, reply *utils.ValueReply) error {
 }
 
 func (node *ChordNode) Delete(args utils.PutArgs, reply *utils.ValueReply) error {
-	println("Get on node", node.Id, "invoked")
+	//println("Get on node", node.Id, "invoked")
 	if node.Pred == node.Succ && node.Succ == node.Id {
 		//solo un nodo nell'anello
 		if _, pres := node.Data[args.Id]; pres {
 			reply.Val = node.Data[args.Id]
-			println(reply.Val)
+			//println(reply.Val)
 			delete(node.Data, args.Id)
 			return nil
 
 		} else {
 			reply.Val = ""
-			println(reply.Val)
+			//	println(reply.Val)
 			return nil
 		}
 	}
 
 	if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) ||
 		(node.Pred > node.Id && (args.Id <= node.Id || args.Id > node.Pred)) {
-		println("Node", node.Id, "manages the resource with id", args.Id)
+		//println("Node", node.Id, "manages the resource with id", args.Id)
 		if node.Data == nil {
-			println("No data yet")
+			//	println("No data yet")
 			reply.Id = args.Id
 			reply.Val = ""
 			return nil
 		}
 		if _, pres := node.Data[args.Id]; pres {
 			reply.Val = node.Data[args.Id]
-			println(reply.Val)
+			//	println(reply.Val)
 			delete(node.Data, args.Id)
 			return nil
 
 		} else {
 			reply.Val = ""
-			println(reply.Val)
+			//	println(reply.Val)
 			return nil
 		}
 
@@ -1089,7 +1060,7 @@ func (node *ChordNode) Delete(args utils.PutArgs, reply *utils.ValueReply) error
 		rep := new(utils.GetReply)
 		//find successor ritorna il node id da contattare
 		node.FindSuccessor(*arg, rep)
-		println("Successor for ", arg.Id, "is: ", rep.Value)
+		//println("Successor for ", arg.Id, "is: ", rep.Value)
 		//contatto il nodo
 		client, err := node.callNode(rep.Value)
 		if err != nil {
@@ -1102,7 +1073,7 @@ func (node *ChordNode) Delete(args utils.PutArgs, reply *utils.ValueReply) error
 			return nil
 
 		}
-		println("Calling Delete on node:", rep.Value)
+		//println("Calling Delete on node:", rep.Value)
 		err = client.Call("ChordNode.Delete", args, reply)
 		if err != nil {
 			reply.Val = ""
@@ -1112,61 +1083,4 @@ func (node *ChordNode) Delete(args utils.PutArgs, reply *utils.ValueReply) error
 		return nil
 	}
 
-	/*
-		if node.Pred == node.Succ && node.Succ == node.Id {
-			//solo un nodo nell'anello
-			if _, pres := node.Data[args.Id]; pres {
-				reply.Val = node.Data[args.Id]
-				println(reply.Val)
-				delete(node.Data, args.Id)
-				return nil
-
-			} else {
-				reply.Val = ""
-				println(reply.Val)
-				return nil
-			}
-		}
-
-		if (node.Pred < node.Id && args.Id <= node.Id && args.Id > node.Pred) || (node.Pred > node.Id && (args.Id < node.Id || args.Id > node.Pred)) {
-			if node.Data == nil {
-				reply.Id = args.Id
-				reply.Val = ""
-				return nil
-			}
-			if _, pres := node.Data[args.Id]; pres {
-				reply.Val = node.Data[args.Id]
-				println(reply.Val)
-				delete(node.Data, args.Id)
-				return nil
-
-			} else {
-				reply.Val = ""
-				return nil
-			}
-
-		} else {
-			arg := new(utils.ArgsSuccessor)
-			arg.Id = args.Id
-			rep := new(utils.GetReply)
-			//find successor ritorna il node id da contattare
-			node.FindSuccessor(*arg, rep)
-			//contatto il nodo
-			client, err := node.callNode(rep.Value)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-
-			if err != nil {
-				log.Println("Error in calling node", err.Error())
-				return err
-			}
-			err = client.Call("ChordNode.Delete", args, reply)
-			if err != nil {
-				reply.Val = ""
-				return nil
-			}
-		}
-		return nil*/
 }

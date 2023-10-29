@@ -65,7 +65,6 @@ var sr_mutex sync.Mutex
 func firstUpdate(sr *ServiceRegistry) error {
 	println("Updating finger tables of the nodes!")
 	for key := range sr.ServiceMapping {
-		println("calling update on node:", key)
 
 		client, err := rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
 		defer client.Close()
@@ -97,14 +96,12 @@ func firstUpdate(sr *ServiceRegistry) error {
 }
 
 func (sr *ServiceRegistry) JoinRequest(args utils.IP_PN_Mapping, joinReply *utils.ChordNode) error {
-	/*sr_mutex.Lock()
-	defer sr_mutex.Unlock()*/
+
 	println("Join request invoked")
 	//nodo di bootstrap
 	ring_size, err := strconv.Atoi(os.Getenv("RING_SIZE"))
 	if err == nil {
 		if sr.Bootstrap != -1 {
-			println("Ring has alreay some node")
 			//attendo attivazione del service registry
 			sr.waitForDone()
 			bootstrapNode := sr.getBootstrap()
@@ -124,7 +121,6 @@ func (sr *ServiceRegistry) JoinRequest(args utils.IP_PN_Mapping, joinReply *util
 				client, err = rpc.DialHTTP("tcp", bootstrapNode.HostName+":"+bootstrapNode.PN)
 				defer client.Close()
 			}
-			println("Generating chord node id")
 			id := sr.generateChordNodeID(args.IP, args.PN, ring_size)
 			reply := new(utils.ChordNode)
 			reply.FingerTable = make([]int, utils.CountBits(ring_size))
@@ -378,11 +374,10 @@ func updateFingerTable(sr *ServiceRegistry) {
 	for {
 
 		for key := range sr.ServiceMapping {
-			println("Trying to connect to node", key)
 			client, err := rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
 
 			if err != nil {
-				//log.Fatal("Error connecting to the node:", err)
+
 				log.Println("Error in connecting to the node", err.Error())
 				//aggiorno predecessore del successore ed il successore del predecessore del nodo che è uscito
 				args := new(utils.Args)
@@ -414,35 +409,6 @@ func updateFingerTable(sr *ServiceRegistry) {
 				break
 			}
 			time.Sleep(time.Second * 10)
-			/*	time.Sleep(time.Minute * 1)
-				for key := range sr.ServiceMapping {
-					println("calling update on node:", key)
-
-					client, err = rpc.DialHTTP("tcp", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
-					defer client.Close()
-					if err != nil {
-						log.Println("Error in connecting to:", sr.ServiceMapping[key].HostName+":"+sr.ServiceMapping[key].PN)
-
-						break
-					}
-					nodeId := new(utils.Args)
-					replyNode := new(utils.ChordNode)
-					err = client.Call("ChordNode.GetNodeInfo", *nodeId, replyNode)
-					if err != nil {
-						log.Println("RPC error:", err.Error())
-						break
-					}
-
-					rep := new(utils.Reply)
-					err = client.Call("ChordNode.UpdateFTRequest", *replyNode, rep)
-
-					if err != nil {
-
-						log.Println("RPC error on UpdateFTRequest", err.Error())
-						break
-					}
-
-				}*/
 		}
 
 	}
@@ -493,7 +459,7 @@ func (sr ServiceRegistry) Delete(args utils.PutArgs, reply *utils.ValueReply) er
 
 }
 func (sr ServiceRegistry) Get(args utils.Args, reply *utils.ValueReply) error {
-	println("Service registry invoked")
+	println("Get on service registry invoked")
 	client, err := sr.contactBootstrap()
 	//invio richiesta get al nodo bootstrap
 	timeout := 10 * time.Second
@@ -548,8 +514,6 @@ func (sr ServiceRegistry) Put(args utils.PutArgs, reply *utils.ValueReply) error
 			reply.Id = -1
 
 		}
-
-		println("Id chosen:", reply.Id)
 		close(closeCtx)
 
 		return
@@ -557,7 +521,6 @@ func (sr ServiceRegistry) Put(args utils.PutArgs, reply *utils.ValueReply) error
 	}()
 	select {
 	case <-closeCtx:
-		println("line 528 id chosen:", reply.Id)
 		return nil
 
 	case <-ctx.Done():
